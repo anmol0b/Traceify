@@ -1,0 +1,85 @@
+# Python
+
+**pycache**/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+
+venv/
+env/
+.venv/
+
+# Conda
+
+conda-meta/
+*.conda
+
+# Environment variables
+
+.env
+.env.local
+.env.*.local
+
+# Logs
+
+*.log
+
+# Python packaging
+
+build/
+dist/
+*.egg-info/
+
+# Testing
+
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+
+.vscode/
+.idea/
+
+# macOS
+
+.DS_Store
+
+# Jupyter
+
+.ipynb_checkpoints/
+
+# FastAPI / Uvicorn
+
+*.pid
+
+# SQLite
+
+*.db
+
+# Migrations cache
+
+alembic/versions/**pycache**/
+
+# Node (for frontend later)
+
+node_modules/
+.next/
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Coverage
+
+coverage/
+
+# Temporary files
+
+tmp/
+temp/
+
+# OS files
+
+Thumbs.db
