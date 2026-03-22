@@ -132,12 +132,12 @@ def _answer_with_groq(
             {
                 "role": "system",
                 "content": (
-                    "You are Traceify, a sharp and concise profile analyst. "
+                    "You are Traceify, a sharp and concise profile analyst and general assistant. "
                     "You have access to a person's public X (Twitter) profile data below. "
-                    "Answer questions naturally and conversationally — like a researcher who just read their profile. "
-                    "Use specific details: quote their bio, mention actual numbers, reference real tweets. "
+                    "For questions about the profile — answer specifically using their bio, tweets, stats. "
+                    "For general questions not related to the profile — answer them naturally from your own knowledge. "
                     "Never say 'based on the context' or 'the data shows' — just answer directly. "
-                    "If something isn't in the data, say clearly what's missing — never invent facts.\n\n"
+                    "Never invent profile facts that aren't in the data.\n\n"
                     f"PROFILE DATA:\n{profile_context}"
                 ),
             }
@@ -155,13 +155,14 @@ def _answer_with_groq(
         is_complex = any(w in question.lower() for w in [
             "analyze", "compare", "summarize", "infer", "suggest",
             "recommend", "whole", "overall", "pattern", "theme",
+            "personality", "what kind", "who is",
         ])
-        model = "llama-3.3-70b-versatile" if is_complex else "llama-3.1-8b-instant"
+        model = "llama-3.3-70b-versatile" if is_complex else "meta-llama/llama-4-scout-17b-16e-instruct"
 
         response = client.chat.completions.create(
             model=model,
             temperature=0.5,
-            max_tokens=512,
+            max_tokens=1024,
             messages=messages,
         )
         content = response.choices[0].message.content if response.choices else None

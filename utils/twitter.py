@@ -41,8 +41,7 @@ def fetch_twitter_profile(handle: str, rapidapi_key: str) -> dict[str, Any]:
             "errors": ["Please enter a valid X handle."],
             "summary": "No X profile was loaded because the handle was empty.",
         }
-
-    # ── Check profile cache first ─────────────────────────────────────────────
+    
     cached = get_cached_profile(cleaned_handle)
     if cached:
         cached["from_cache"] = True
@@ -133,9 +132,8 @@ def fetch_twitter_profile(handle: str, rapidapi_key: str) -> dict[str, Any]:
         }
         profile["summary"] = build_profile_summary(profile)
 
-        # ── Save to Supabase ──────────────────────────────────────────────────
         save_profile(cleaned_handle, profile)
-
+        save_tweets(cleaned_handle, raw_tweets)
         return profile
 
     except Exception as exc:
