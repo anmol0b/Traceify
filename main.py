@@ -11,6 +11,15 @@ st.set_page_config(
 
 load_css()
 
+st.markdown("""
+<h1 style="font-family:'DM Serif Display',serif;font-size:3rem;font-weight:400;color:#f0f0fa;margin-bottom:0;line-height:1;">
+    Traceify
+</h1>
+<p style="font-family:'DM Mono',monospace;font-size:0.7rem;letter-spacing:0.2em;text-transform:uppercase;color:rgba(220,220,240,0.3);margin-top:4px;margin-bottom:32px;">
+    Public Profile Intelligence
+</p>
+""", unsafe_allow_html=True)
+
 render_html("hero.html")
 st.markdown("<br>", unsafe_allow_html=True)
 
