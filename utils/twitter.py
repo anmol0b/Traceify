@@ -7,10 +7,11 @@ import httpx
 from .profiles import build_profile_summary
 
 
+
 def fetch_twitter_profile(handle: str, rapidapi_key: str) -> dict[str, Any]:
     from .db import get_cached_profile, save_profile, has_tweets, get_tweets, save_tweets
 
-    cleaned_handle = handle.lstrip("@").strip()
+    cleaned_handle = _extract_handle(handle)
     public_url = f"https://x.com/{cleaned_handle}"
 
     if not cleaned_handle:
@@ -242,6 +243,13 @@ def _build_tweet_insights(tweets: list[dict[str, Any]]) -> dict[str, Any]:
         ],
     }
 
+
+def _extract_handle(raw: str) -> str:
+    raw = raw.strip()
+    if "x.com/" in raw:
+        parts = raw.rstrip("/").split("/")
+        return parts[-1].lstrip("@").strip()
+    return raw.lstrip("@").strip()
 
 def _empty_twitter_profile(handle: str) -> dict[str, Any]:
     return {
