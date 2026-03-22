@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import hashlib
 from typing import Any
-
+import streamlit as st
 from .config import settings
 
 _supabase = None
 _embedder = None
 
-
+@st.cache_resource
 def _get_supabase():
     global _supabase
     if _supabase is None:
@@ -16,7 +16,7 @@ def _get_supabase():
         _supabase = create_client(settings.supabase_url, settings.supabase_key)
     return _supabase
 
-
+@st.cache_resource
 def _get_embedder():
     global _embedder
     if _embedder is None:
@@ -29,7 +29,6 @@ def _db_available() -> bool:
     return bool(settings.supabase_url and settings.supabase_key)
 
 
-# ── Profiles ──────────────────────────────────────────────────────────────────
 
 def get_cached_profile(handle: str) -> dict[str, Any] | None:
     if not _db_available():

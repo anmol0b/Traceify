@@ -7,41 +7,18 @@ import httpx
 from .profiles import build_profile_summary
 
 
-
 def fetch_twitter_profile(handle: str, rapidapi_key: str) -> dict[str, Any]:
     from .db import get_cached_profile, save_profile, has_tweets, get_tweets, save_tweets
 
-    cleaned_handle = _extract_handle(handle)
-    public_url = f"https://x.com/{cleaned_handle}"
+    cleaned_handle = handle.lstrip("@").strip()
 
     if not cleaned_handle:
-        return {
-            "platform": "x",
-            "display_name": "Unknown",
-            "normalized_input": "",
-            "headline": "Public X profile",
-            "bio": "",
-            "location": None,
-            "website": public_url,
-            "profile_image_url": None,
-            "followers": None,
-            "following": None,
-            "tweet_count": None,
-            "is_verified": None,
-            "joined_at": None,
-            "recent_posts": [],
-            "tweet_insights": {},
-            "tweets_analyzed": 0,
-            "experience": [],
-            "education": [],
-            "skills": [],
-            "articles": [],
-            "public_url": public_url,
-            "source_status": "error",
-            "errors": ["Please enter a valid X handle."],
-            "summary": "No X profile was loaded because the handle was empty.",
-        }
-    
+        return _error_profile("", "Please enter a valid X handle.")
+
+    import re
+    if not re.match(r"^[A-Za-z0-9_]{1,15}$", cleaned_handle):
+        return _error_profile(cleaned_handle, f"'{cleaned_handle}' is not a valid X handle. Use only letters, numbers, and underscores (max 15 chars).")
+
     cached = get_cached_profile(cleaned_handle)
     if cached:
         cached["from_cache"] = True
@@ -53,10 +30,7 @@ def fetch_twitter_profile(handle: str, rapidapi_key: str) -> dict[str, Any]:
         return cached
 
     if not rapidapi_key:
-        profile = _empty_twitter_profile(cleaned_handle)
-        profile["errors"] = ["RAPIDAPI_KEY is not set."]
-        profile["summary"] = build_profile_summary(profile)
-        return profile
+        return _error_profile(cleaned_handle, "RAPIDAPI_KEY is not set. Please configure it in your environment.")
 
     try:
         response = httpx.get(
@@ -66,10 +40,31 @@ def fetch_twitter_profile(handle: str, rapidapi_key: str) -> dict[str, Any]:
                 "x-rapidapi-key": rapidapi_key,
                 "x-rapidapi-host": "twitter241.p.rapidapi.com",
             },
-            timeout=10,
+            timeout=15,
         )
         response.raise_for_status()
 
+    except httpx.TimeoutException:
+        return _error_profile(cleaned_handle, "Request timed out. Check your internet connection and try again.")
+
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        if status == 429:
+            msg = "Rate limit reached. Please wait a moment and try again."
+        elif status == 403:
+            msg = "API access denied. Check your RAPIDAPI_KEY."
+        elif status == 404:
+            msg = f"@{cleaned_handle} not found. The account may not exist."
+        elif status == 401:
+            msg = "Invalid API key. Please check your RAPIDAPI_KEY."
+        else:
+            msg = f"API error {status}. Please try again later."
+        return _error_profile(cleaned_handle, msg)
+
+    except httpx.RequestError as exc:
+        return _error_profile(cleaned_handle, f"Network error: {exc}. Check your internet connection.")
+
+    try:
         user = (
             response.json()
             .get("result", {})
@@ -77,70 +72,82 @@ def fetch_twitter_profile(handle: str, rapidapi_key: str) -> dict[str, Any]:
             .get("user", {})
             .get("result", {})
         )
-        if not user:
-            profile = _empty_twitter_profile(cleaned_handle)
-            profile["errors"] = ["Empty response from the X profile endpoint."]
-            profile["summary"] = build_profile_summary(profile)
-            return profile
+    except Exception:
+        return _error_profile(cleaned_handle, "Failed to parse API response. Please try again.")
 
-        core = user.get("core", {})
-        legacy = user.get("legacy", {})
-        location = user.get("location", {}).get("location")
-        avatar = user.get("avatar", {}).get("image_url")
-        rest_id = user.get("rest_id")
+    if not user:
+        return _error_profile(cleaned_handle, f"No profile found for @{cleaned_handle}. The account may not exist or may have been suspended.")
 
-        website_urls = legacy.get("entities", {}).get("url", {}).get("urls", [])
-        website = website_urls[0].get("expanded_url", public_url) if website_urls else public_url
+    if user.get("__typename") == "UserUnavailable":
+        return _error_profile(cleaned_handle, f"@{cleaned_handle} is unavailable. The account may be suspended or deleted.")
 
-        # ── Fetch tweets ──────────────────────────────────────────────────────
-        if rest_id:
+    legacy = user.get("legacy", {})
+    if legacy.get("protected", False):
+        profile = _empty_twitter_profile(cleaned_handle)
+        profile["source_status"] = "private"
+        profile["errors"] = [f"@{cleaned_handle} is a private account. Only public profiles can be analyzed."]
+        profile["summary"] = f"@{cleaned_handle} is a private X account and cannot be analyzed."
+        return profile
+
+    core = user.get("core", {})
+    location = user.get("location", {}).get("location")
+    avatar = user.get("avatar", {}).get("image_url")
+    rest_id = user.get("rest_id")
+
+    website_urls = legacy.get("entities", {}).get("url", {}).get("urls", [])
+    website = website_urls[0].get("expanded_url", f"https://x.com/{cleaned_handle}") if website_urls else f"https://x.com/{cleaned_handle}"
+
+    raw_tweets = []
+    tweet_errors = []
+
+    if rest_id:
+        try:
             if has_tweets(cleaned_handle):
                 raw_tweets = get_tweets(cleaned_handle)
             else:
                 raw_tweets = _fetch_all_tweets(rest_id, rapidapi_key, pages=5)
-                save_tweets(cleaned_handle, raw_tweets)
-        else:
-            raw_tweets = []
+                if raw_tweets:
+                    save_tweets(cleaned_handle, raw_tweets)
+        except Exception as exc:
+            tweet_errors.append(f"Could not fetch tweets: {exc}")
 
-        insights = _build_tweet_insights(raw_tweets)
+    insights = _build_tweet_insights(raw_tweets)
 
-        profile = {
-            "platform": "x",
-            "input": f"@{cleaned_handle}",
-            "normalized_input": cleaned_handle,
-            "display_name": core.get("name", f"@{cleaned_handle}"),
-            "headline": "Public X profile",
-            "bio": legacy.get("description") or "",
-            "location": location,
-            "website": website,
-            "profile_image_url": avatar,
-            "followers": legacy.get("followers_count"),
-            "following": legacy.get("friends_count"),
-            "tweet_count": legacy.get("statuses_count"),
-            "is_verified": user.get("is_blue_verified", False),
-            "joined_at": core.get("created_at"),
-            "recent_posts": [t["text"] for t in raw_tweets[:10]],
-            "tweet_insights": insights,
-            "tweets_analyzed": len(raw_tweets),
-            "experience": [],
-            "education": [],
-            "skills": [],
-            "articles": [],
-            "public_url": public_url,
-            "source_status": "live",
-            "errors": [],
-        }
-        profile["summary"] = build_profile_summary(profile)
+    profile = {
+        "platform": "x",
+        "input": f"@{cleaned_handle}",
+        "normalized_input": cleaned_handle,
+        "display_name": core.get("name", f"@{cleaned_handle}"),
+        "headline": "Public X profile",
+        "bio": legacy.get("description") or "",
+        "location": location,
+        "website": website,
+        "profile_image_url": avatar,
+        "followers": legacy.get("followers_count"),
+        "following": legacy.get("friends_count"),
+        "tweet_count": legacy.get("statuses_count"),
+        "is_verified": user.get("is_blue_verified", False),
+        "joined_at": core.get("created_at"),
+        "recent_posts": [t["text"] for t in raw_tweets[:10]],
+        "tweet_insights": insights,
+        "tweets_analyzed": len(raw_tweets),
+        "experience": [],
+        "education": [],
+        "skills": [],
+        "articles": [],
+        "public_url": f"https://x.com/{cleaned_handle}",
+        "source_status": "live",
+        "errors": tweet_errors,
+        "from_cache": False,
+    }
+    profile["summary"] = build_profile_summary(profile)
 
+    try:
         save_profile(cleaned_handle, profile)
-        save_tweets(cleaned_handle, raw_tweets)
-        return profile
+    except Exception:
+        pass
 
-    except Exception as exc:
-        profile = _empty_twitter_profile(cleaned_handle)
-        profile["errors"] = [str(exc)]
-        profile["summary"] = build_profile_summary(profile)
-        return profile
+    return profile
 
 
 def _fetch_all_tweets(user_id: str, rapidapi_key: str, pages: int = 5) -> list[dict[str, Any]]:
@@ -211,6 +218,11 @@ def _fetch_all_tweets(user_id: str, rapidapi_key: str, pages: int = 5) -> list[d
 
             cursor = next_cursor
 
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 429:
+                break  # Rate limited — stop paginating gracefully
+            break
+
         except Exception:
             break
 
@@ -242,12 +254,14 @@ def _build_tweet_insights(tweets: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _extract_handle(raw: str) -> str:
-    raw = raw.strip()
-    if "x.com/" in raw:
-        parts = raw.rstrip("/").split("/")
-        return parts[-1].lstrip("@").strip()
-    return raw.lstrip("@").strip()
+def _error_profile(handle: str, message: str) -> dict[str, Any]:
+    """Return a clean error profile with a user-friendly message."""
+    profile = _empty_twitter_profile(handle)
+    profile["source_status"] = "error"
+    profile["errors"] = [message]
+    profile["summary"] = message
+    return profile
+
 
 def _empty_twitter_profile(handle: str) -> dict[str, Any]:
     return {
@@ -275,4 +289,5 @@ def _empty_twitter_profile(handle: str) -> dict[str, Any]:
         "public_url": f"https://x.com/{handle}",
         "source_status": "fallback",
         "errors": [],
+        "from_cache": False,
     }

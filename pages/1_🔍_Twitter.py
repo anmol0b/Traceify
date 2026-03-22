@@ -59,14 +59,18 @@ def on_fetch(handle: str) -> None:
     st.session_state.twitter_suggested_questions = suggested_questions(profile)
     st.rerun()
 
-
 def on_clear() -> None:
+    from utils.db import clear_profile, clear_tweets
+    handle = st.session_state.twitter_handle_input
+    if handle:
+        cleaned = handle.lstrip("@").strip()
+        clear_tweets(cleaned)
+        clear_profile(cleaned)
     st.session_state.twitter_profile = None
     st.session_state.twitter_conversation = []
     st.session_state.twitter_suggested_questions = []
     st.session_state.twitter_handle_input = ""
     st.rerun()
-
 
 def on_question(question: str) -> None:
     profile = st.session_state.twitter_profile
