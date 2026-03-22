@@ -83,3 +83,6 @@ temp/
 # OS files
 
 Thumbs.db
+
+
+secrets.toml
