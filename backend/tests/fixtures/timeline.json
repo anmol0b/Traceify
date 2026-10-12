@@ -1,0 +1,19 @@
+{"result": {"timeline": {"instructions": [{"type": "TimelineAddEntries", "entries": [
+  {"entryId": "tweet-1", "content": {"itemContent": {"tweet_results": {"result": {
+    "__typename": "Tweet", "rest_id": "1",
+    "views": {"count": "1000"},
+    "legacy": {"full_text": "Seek wealth, not money or status.", "favorite_count": 500, "retweet_count": 50, "created_at": "Mon"}
+  }}}}},
+  {"entryId": "tweet-2", "content": {"itemContent": {"tweet_results": {"result": {
+    "__typename": "TweetWithVisibilityResults",
+    "tweet": {"rest_id": "2", "views": {"count": "5000"},
+      "legacy": {"full_text": "Play long-term games with long-term people.", "favorite_count": 100, "retweet_count": 10, "created_at": "Tue"}}
+  }}}}},
+  {"entryId": "tweet-3", "content": {"itemContent": {"tweet_results": {"result": {
+    "rest_id": "3", "legacy": {"full_text": "RT @someone: retweeted", "favorite_count": 1}
+  }}}}},
+  {"entryId": "tweet-4", "content": {"itemContent": {"tweet_results": {"result": {
+    "rest_id": "4", "legacy": {"full_text": "a reply", "in_reply_to_status_id_str": "99"}
+  }}}}},
+  {"entryId": "cursor-bottom-0", "content": {"value": "CURSOR_2"}}
+]}]}}}
