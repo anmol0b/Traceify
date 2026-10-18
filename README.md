@@ -9,7 +9,7 @@
 
 ![Traceify profile page with streamed AI chat](docs/demo.png)
 
-**Stack:** Next.js 16 · TypeScript · Tailwind CSS · FastAPI · Pydantic · Supabase (Postgres + pgvector) · fastembed · Groq · Docker · GitHub Actions
+**Stack:** Next.js 16 · TypeScript · Tailwind CSS · FastAPI · Pydantic · Neon (serverless Postgres + pgvector) · psycopg · fastembed · Groq · Docker · GitHub Actions
 
 ---
 
@@ -21,7 +21,7 @@
 - **Retrieval-augmented chat**: each question is embedded and matched against the person's tweets with pgvector, and the best matches are added to the prompt
 - **Streaming answers** token by token from Groq, with model routing (a fast model for simple questions, a larger one for analysis)
 - **Graceful degradation**: works without a database (in-memory cache) and without an LLM (rule-based answers)
-- **24h profile cache** in Supabase, so repeat visits don't spend API quota
+- **24h profile cache** in Postgres, so repeat visits don't spend API quota
 - **Typed error states** for invalid handles, missing and private accounts, and rate limits
 - **Per-IP rate limiting** to protect the public demo's API quotas
 
@@ -34,13 +34,13 @@ flowchart LR
     FE -- "POST /api/chat (streamed)" --> API
     API --> X["RapidAPI twitter241<br/>profile + tweets"]
     API --> EMB["fastembed<br/>bge-small-en-v1.5 (384-d)"]
-    API --> DB[("Supabase Postgres<br/>profiles · tweets + pgvector")]
+    API --> DB[("Neon Postgres<br/>profiles · tweets + pgvector")]
     API --> LLM["Groq<br/>gpt-oss-20b / gpt-oss-120b"]
 ```
 
 **Profile request:** normalize the handle → return the cached profile if it's under 24h old → otherwise fetch the profile and paginated tweets → save the profile row → embed the tweets and upsert them. The profile is saved first because `tweets.handle` has a foreign key to `profiles.handle`.
 
-**Chat request:** load the profile server-side, rather than trusting profile data sent by the client → embed the question and run `search_tweets()` (cosine similarity in pgvector) → build the system prompt from the profile, insights, recent tweets and the retrieved tweets → append the last 6 turns and the question → stream Groq's response as chunked plain text.
+**Chat request:** load the profile server-side, rather than trusting profile data sent by the client → embed the question and run a cosine-similarity query against the HNSW index in pgvector → build the system prompt from the profile, insights, recent tweets and the retrieved tweets → append the last 6 turns and the question → stream Groq's response as chunked plain text.
 
 ## API
 
@@ -67,7 +67,7 @@ backend/
     services/
       x_client.py         RapidAPI client, timeline parsing, insights
       profile_service.py  Cache → fetch → persist orchestration
-      repo.py             Supabase persistence, TTL cache, vector search
+      repo.py             Postgres persistence (psycopg pool), TTL cache, vector search
       embeddings.py       fastembed wrapper
       chat.py             Prompt building, model routing, streaming, fallback
       profiles.py         Handle normalization, summaries, suggested questions
@@ -76,16 +76,15 @@ frontend/
   app/                    Landing page, /x/[handle] profile page
   components/             HandleSearch, ProfileCard, TweetInsights, ChatPanel, ProfileView
   lib/                    Typed API client (incl. stream reader), handle parsing
-supabase/
-  schema.sql              Tables, HNSW index, search_tweets() RPC, RLS
-  migrate_v1_to_v2.sql    One-off migration from the original Streamlit schema
+db/
+  schema.sql              Tables, foreign key, HNSW vector index
 ```
 
 ## Running locally
 
 ### 1. Database (optional, but needed for caching and semantic search)
 
-Create a free project at [supabase.com](https://supabase.com) and run [`supabase/schema.sql`](supabase/schema.sql) in the SQL editor. Use the **service-role** key in the backend. RLS is enabled with no policies, so the public anon key can't touch the tables.
+Any Postgres with the pgvector extension works. The demo uses a free [Neon](https://neon.tech) project: copy its **pooled** connection string into `DATABASE_URL`, then apply the schema with `psql "$DATABASE_URL" -f db/schema.sql` (or paste [`db/schema.sql`](db/schema.sql) into Neon's SQL editor).
 
 ### 2. Backend
 
@@ -119,7 +118,7 @@ docker compose up --build
 |---|---|---|
 | `RAPIDAPI_KEY` | Yes | [RapidAPI](https://rapidapi.com): subscribe to **twitter241** (free tier) |
 | `GROQ_API_KEY` | Recommended | [console.groq.com](https://console.groq.com). Without it, chat uses rule-based answers |
-| `SUPABASE_URL`, `SUPABASE_KEY` | Recommended | Without them, profiles are cached in memory and semantic search is off |
+| `DATABASE_URL` | Recommended | Postgres + pgvector connection string. Without it, profiles are cached in memory and semantic search is off |
 | `ALLOWED_ORIGINS` | Prod | Comma-separated frontend origins for CORS |
 | `GROQ_MODEL_FAST`, `GROQ_MODEL_SMART` | No | Override the models if Groq retires them |
 | `CACHE_TTL_HOURS` | No | Default `24` |
@@ -143,7 +142,8 @@ The backend suite covers handle and URL parsing, timeline parsing, upstream erro
 
 - **FastAPI + Next.js instead of Streamlit.** A typed REST API with streaming responses, a separately deployable frontend, and a real loading, error and empty state for every request.
 - **Groq.** Very high tokens/sec, so streamed answers start almost instantly. Questions that ask for analysis ("analyze", "compare", "why"…) are routed to the larger model, and everything else goes to the faster one.
-- **Postgres + pgvector in one database.** Structured cache and embeddings live together, with no separate vector store to run. An HNSW index plus a SQL function makes per-handle similarity search a single RPC.
+- **Postgres + pgvector in one database.** Structured cache and embeddings live together, with no separate vector store to run. An HNSW index on the embeddings makes per-handle similarity search a single SQL query.
+- **Neon + plain SQL instead of a hosted BaaS client.** Serverless Postgres scales to zero when idle and wakes in under a second, so a free-tier demo never needs a manual restore. The backend talks to it with psycopg and a small connection pool that re-checks connections Neon has dropped.
 - **fastembed (ONNX) instead of sentence-transformers.** The same 384-dimensional embeddings without PyTorch, which keeps the container small enough for free hosting tiers.
 - **Server-side profile lookup in chat.** The client sends only the handle and history, so it can't inject fake "profile facts" into the prompt.
 - **Fail soft.** Database, embedding and LLM failures are logged and degrade gracefully instead of breaking the page.

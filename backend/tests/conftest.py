@@ -26,7 +26,7 @@ def _reset_rate_limiter():
 
 @pytest.fixture
 def settings() -> Settings:
-    return Settings(_env_file=None, groq_api_key="", rapidapi_key="test", supabase_url="", supabase_key="")
+    return Settings(_env_file=None, groq_api_key="", rapidapi_key="test", database_url="")
 
 
 @pytest.fixture

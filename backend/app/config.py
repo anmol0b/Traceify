@@ -10,8 +10,7 @@ class Settings(BaseSettings):
 
     groq_api_key: str = ""
     rapidapi_key: str = ""
-    supabase_url: str = ""
-    supabase_key: str = ""
+    database_url: str = ""  # Postgres with pgvector, e.g. a Neon pooled connection string
 
     groq_model_fast: str = "openai/gpt-oss-20b"
     groq_model_smart: str = "openai/gpt-oss-120b"
@@ -31,7 +30,7 @@ class Settings(BaseSettings):
 
     @property
     def db_enabled(self) -> bool:
-        return bool(self.supabase_url and self.supabase_key)
+        return bool(self.database_url)
 
 
 @lru_cache(maxsize=1)

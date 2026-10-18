@@ -19,7 +19,7 @@ log = logging.getLogger("traceify")
 async def lifespan(app: FastAPI):
     settings = get_settings()
     if settings.db_enabled:
-        # Warm the Supabase client and embedding model so the first request isn't slow.
+        # Open the database pool and embedding model so the first request isn't slow.
         from .services.embeddings import get_embedder
         from .services.repo import get_repo
 

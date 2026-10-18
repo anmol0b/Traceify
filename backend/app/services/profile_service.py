@@ -21,7 +21,7 @@ class ProfileService:
         self.repo = repo
         self.x = x_client
         self.tweet_pages = tweet_pages
-        # Fallback store so chat still works when Supabase isn't configured.
+        # Fallback store so chat still works when no database is configured.
         self._memory: OrderedDict[str, Profile] = OrderedDict()
         self._memory_size = memory_size
         self._lock = Lock()
