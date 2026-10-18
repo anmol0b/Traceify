@@ -1,10 +1,13 @@
 # Traceify
 
 [![CI](https://github.com/anmol0b/Traceify/actions/workflows/ci.yml/badge.svg)](https://github.com/anmol0b/Traceify/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > Public profile intelligence: load any public X (Twitter) profile and have a grounded AI conversation about the person, backed by semantic search over their tweets.
 
-<!-- Add a screenshot or GIF of the profile page here: ![Traceify](docs/demo.png) -->
+**Live demo:** [traceify-nine.vercel.app](https://traceify-nine.vercel.app) (the free-tier backend may take ~30s to wake up on the first request)
+
+![Traceify profile page with streamed AI chat](docs/demo.png)
 
 **Stack:** Next.js 16 · TypeScript · Tailwind CSS · FastAPI · Pydantic · Supabase (Postgres + pgvector) · fastembed · Groq · Docker · GitHub Actions
 
@@ -126,10 +129,10 @@ docker compose up --build
 
 ```bash
 cd backend && ruff check . && pytest -q
-cd frontend && npm run lint && npm run build
+cd frontend && npm run lint && npm test && npm run build
 ```
 
-The backend suite covers handle and URL parsing, timeline parsing, upstream error mapping, insights, prompt construction (including a regression test that the question is sent only once), streaming and fallback behavior, TTL caching, rate limiting, and the API routes (including a check that the profile is saved before its tweets). CI runs both jobs on every push.
+The backend suite covers handle and URL parsing, timeline parsing, upstream error mapping, insights, prompt construction (including a regression test that the question is sent only once), streaming and fallback behavior, TTL caching, rate limiting, and the API routes (including a check that the profile is saved before its tweets). The frontend has Vitest tests for handle and URL parsing that use the same cases as the backend, so the two parsers stay in sync. CI runs both jobs on every push and pull request.
 
 ## Deployment
 
@@ -150,3 +153,7 @@ The backend suite covers handle and URL parsing, timeline parsing, upstream erro
 - Only ~100 of the most recent original tweets are analyzed.
 - The rate limiter is in-memory and per-process. A multi-instance deployment would need Redis.
 - Data comes from a third-party RapidAPI wrapper and is subject to its availability and quotas.
+
+## License
+
+[MIT](LICENSE)

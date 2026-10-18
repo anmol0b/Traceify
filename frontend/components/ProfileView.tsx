@@ -104,6 +104,13 @@ export function ProfileView({ handle }: { handle: string }) {
 }
 
 export function ProfileSkeleton() {
+  const [slow, setSlow] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSlow(true), 6000);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <div className="grid animate-pulse gap-8 lg:grid-cols-[1fr_1.2fr]" aria-busy="true" aria-label="Loading profile">
       <div className="space-y-5">
@@ -120,7 +127,11 @@ export function ProfileSkeleton() {
             <div key={i} className="h-16 rounded-lg bg-surface-2" />
           ))}
         </div>
-        <p className="font-mono text-xs text-faint">Fetching profile and recent tweets — first load can take ~10s…</p>
+        <p className="font-mono text-xs text-faint" aria-live="polite">
+          {slow
+            ? "Waking up the server — the free-tier backend sleeps when idle, so this can take up to ~30s…"
+            : "Fetching profile and recent tweets…"}
+        </p>
       </div>
       <div className="h-[70vh] min-h-[480px] rounded-xl bg-surface-2/60" />
     </div>
