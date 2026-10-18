@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.errors import PrivateAccount
 from app.main import create_app
 from app.schemas import Tweet
@@ -119,3 +119,10 @@ def test_chat_rate_limit(make_client, profile, settings):
     limited = client.post("/api/chat", json=payload)
     assert limited.status_code == 429
     assert limited.json()["code"] == "rate_limited"
+
+
+def test_cors_origins_ignore_whitespace_and_trailing_slashes():
+    settings = Settings(
+        _env_file=None, allowed_origins=" https://traceify.anmol0b.xyz/ ,https://traceify-nine.vercel.app,"
+    )
+    assert settings.cors_origins == ["https://traceify.anmol0b.xyz", "https://traceify-nine.vercel.app"]

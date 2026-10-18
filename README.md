@@ -5,7 +5,7 @@
 
 > Public profile intelligence: load any public X (Twitter) profile and have a grounded AI conversation about the person, backed by semantic search over their tweets.
 
-**Live demo:** [traceify-nine.vercel.app](https://traceify-nine.vercel.app) (the free-tier backend may take ~30s to wake up on the first request)
+**Live demo:** [traceify.anmol0b.xyz](https://traceify.anmol0b.xyz) (the free-tier backend may take ~30s to wake up on the first request)
 
 ![Traceify profile page with streamed AI chat](docs/demo.png)
 

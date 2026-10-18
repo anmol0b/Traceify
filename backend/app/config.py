@@ -26,7 +26,8 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> list[str]:
-        return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
+        # Browsers send Origin without a trailing slash, so "https://site.com/" would never match.
+        return [o.strip().rstrip("/") for o in self.allowed_origins.split(",") if o.strip()]
 
     @property
     def db_enabled(self) -> bool:
