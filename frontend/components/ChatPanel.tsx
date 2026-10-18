@@ -1,10 +1,16 @@
 "use client";
 
+import { ArrowUp, ArrowUpRight, CircleAlert, LoaderCircle } from "lucide-react";
+import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { LogoMark } from "@/components/Brand";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { ApiError, streamChat } from "@/lib/api";
 import type { ChatMessage } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 const SESSION_QUESTION_CAP = 30;
 
@@ -68,57 +74,91 @@ export function ChatPanel({ handle, starter, suggestions }: Props) {
   const showSuggestions = messages.length === 1 && suggestions.length > 0;
 
   return (
-    <section aria-label="AI chat" className="flex h-[70vh] min-h-[480px] flex-col rounded-xl border border-line bg-surface/70">
-      <div className="border-b border-line px-4 py-3 font-mono text-xs uppercase tracking-[0.15em] text-faint">
-        AI chat · @{handle}
-      </div>
+    <section aria-label="AI chat" className="flex h-full min-h-0 flex-col">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4 md:px-6">
+        <div className="flex min-w-0 items-baseline gap-2 text-sm">
+          <span className="font-medium text-foreground">Chat</span>
+          <span className="truncate font-mono text-[13px] text-subtle-foreground">@{handle}</span>
+        </div>
+        <span className="inline-flex shrink-0 items-center gap-2 text-[13px] text-muted-foreground">
+          <span
+            aria-hidden
+            className={cn("size-2 rounded-full", streaming ? "animate-pulse bg-warning" : "bg-success")}
+          />
+          {streaming ? "Answering" : "Ready"}
+        </span>
+      </header>
 
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-4" aria-live="polite">
+      <div ref={scrollRef} className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-4 py-6 md:px-6" aria-live="polite">
         {messages.map((m, i) => (
-          <div key={i} className={m.role === "user" ? "flex justify-end" : "flex"}>
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            className={m.role === "user" ? "flex justify-end" : "flex gap-3"}
+          >
+            {m.role === "assistant" && (
+              <div className="grid size-7 shrink-0 place-items-center rounded-full border bg-surface text-foreground">
+                <LogoMark className="size-3.5" />
+              </div>
+            )}
             <div
               className={
                 m.role === "user"
-                  ? "max-w-[85%] rounded-2xl rounded-br-sm bg-accent/15 px-4 py-2 text-sm text-fg"
-                  : "prose-chat max-w-[95%] text-sm leading-relaxed text-fg/90"
+                  ? "max-w-[85%] rounded-2xl rounded-br-sm bg-secondary px-4 py-2.5 text-[15px] leading-relaxed text-foreground"
+                  : "prose-chat min-w-0 flex-1 pt-0.5 text-[15px] leading-relaxed text-foreground/90"
               }
             >
               {m.role === "assistant" ? (
                 m.content ? (
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                 ) : (
-                  <span className="inline-flex gap-1 text-faint" aria-label="Thinking">
-                    <span className="animate-pulse">●</span>
-                    <span className="animate-pulse [animation-delay:150ms]">●</span>
-                    <span className="animate-pulse [animation-delay:300ms]">●</span>
+                  <span role="status" className="inline-flex h-6 items-center gap-1" aria-label="Thinking">
+                    <span className="animate-dot size-1.5 rounded-full bg-foreground" />
+                    <span className="animate-dot size-1.5 rounded-full bg-foreground [animation-delay:150ms]" />
+                    <span className="animate-dot size-1.5 rounded-full bg-foreground [animation-delay:300ms]" />
                   </span>
                 )
               ) : (
                 m.content
               )}
             </div>
-          </div>
+          </motion.div>
         ))}
 
         {showSuggestions && (
-          <div className="grid gap-2 pt-2 sm:grid-cols-2">
-            {suggestions.map((s) => (
-              <button
-                key={s}
-                onClick={() => ask(s)}
-                className="rounded-lg border border-line bg-surface-2/60 px-3 py-2 text-left text-sm text-muted transition hover:border-accent/40 hover:text-fg"
-              >
-                {s}
-              </button>
-            ))}
+          <div className="pl-10">
+            <p className="mb-2 text-xs text-subtle-foreground">Suggested</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {suggestions.map((s, i) => (
+                <motion.button
+                  key={s}
+                  type="button"
+                  onClick={() => ask(s)}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: 0.15 + i * 0.05, ease: [0.16, 1, 0.3, 1] }}
+                  whileTap={{ scale: 0.98 }}
+                  className="group flex items-start justify-between gap-3 rounded-lg border bg-surface px-3.5 py-3 text-left text-sm text-muted-foreground transition-colors duration-150 outline-none hover:border-input hover:bg-[#111] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {s}
+                  <ArrowUpRight
+                    aria-hidden
+                    className="mt-0.5 size-3.5 shrink-0 text-subtle-foreground transition-[color,transform] duration-150 group-hover:translate-x-px group-hover:-translate-y-px group-hover:text-foreground"
+                  />
+                </motion.button>
+              ))}
+            </div>
           </div>
         )}
       </div>
 
       {error && (
-        <p role="alert" className="mx-4 mb-2 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
+        <Alert variant="destructive" className="animate-enter mx-4 mb-1 w-auto border-destructive/30 bg-destructive/10 md:mx-6">
+          <CircleAlert aria-hidden />
+          <AlertDescription className="text-destructive/90">{error}</AlertDescription>
+        </Alert>
       )}
 
       <form
@@ -126,26 +166,32 @@ export function ChatPanel({ handle, starter, suggestions }: Props) {
           e.preventDefault();
           ask(input);
         }}
-        className="flex gap-2 border-t border-line p-3"
+        className="shrink-0 p-3 md:p-4"
       >
-        <label htmlFor="chat-input" className="sr-only">
-          Ask a question
-        </label>
-        <input
-          id="chat-input"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          maxLength={1000}
-          placeholder={`Ask anything about @${handle}…`}
-          className="min-w-0 flex-1 rounded-lg border border-line bg-bg px-3 py-2 text-sm placeholder:text-faint focus:border-accent/60 focus:outline-none"
-        />
-        <button
-          type="submit"
-          disabled={streaming || !input.trim()}
-          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg disabled:opacity-40"
-        >
-          {streaming ? "…" : "Send"}
-        </button>
+        <div className="flex items-center gap-2 rounded-xl border border-input bg-surface p-1.5 pl-4 transition-[border-color,box-shadow] duration-150 ease-out focus-within:border-ring/70 focus-within:ring-4 focus-within:ring-ring/15">
+          <label htmlFor="chat-input" className="sr-only">
+            Ask a question
+          </label>
+          <input
+            id="chat-input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            maxLength={1000}
+            autoComplete="off"
+            enterKeyHint="send"
+            placeholder={`Ask anything about @${handle}…`}
+            className="h-9 min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-subtle-foreground sm:text-[15px]"
+          />
+          <Button
+            type="submit"
+            size="icon"
+            disabled={streaming || !input.trim()}
+            aria-label={streaming ? "Answering" : "Send"}
+            className="size-9 rounded-lg hover:bg-primary/85 active:scale-95 disabled:bg-secondary disabled:text-subtle-foreground disabled:opacity-100"
+          >
+            {streaming ? <LoaderCircle aria-hidden className="animate-spin" /> : <ArrowUp aria-hidden />}
+          </Button>
+        </div>
       </form>
     </section>
   );
