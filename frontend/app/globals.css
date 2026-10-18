@@ -1,46 +1,249 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --color-bg: #050508;
-  --color-surface: #0c0c14;
-  --color-surface-2: #13131f;
-  --color-line: rgb(255 255 255 / 0.08);
-  --color-fg: #e8e8f0;
-  --color-muted: rgb(220 220 240 / 0.55);
-  --color-faint: rgb(220 220 240 / 0.3);
-  --color-accent: #64ff96;
-  --color-accent-fg: #04140a;
-  --color-danger: #ff6b6b;
-  --color-warn: #febc2e;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
 
-  --font-sans: var(--font-dm-sans);
-  --font-serif: var(--font-dm-serif);
-  --font-mono: var(--font-dm-mono);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface: var(--surface);
+  --color-info: var(--info);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Dark-only palette modelled on Geist (Vercel). `.dark` is set on <html> for shadcn's dark: variants. */
 :root {
   color-scheme: dark;
+  --radius: 0.5rem;
+
+  --background: #000;
+  --foreground: #ededed;
+  --surface: #0a0a0a;
+  --card: #0a0a0a;
+  --card-foreground: var(--foreground);
+  --popover: #111;
+  --popover-foreground: var(--foreground);
+  --primary: #ededed;
+  --primary-foreground: #0a0a0a;
+  --secondary: #1a1a1a;
+  --secondary-foreground: var(--foreground);
+  --muted: #1a1a1a;
+  --muted-foreground: #a1a1a1;
+  --subtle-foreground: #878787;
+  --accent: #1f1f1f;
+  --accent-foreground: var(--foreground);
+  --destructive: #ff6166;
+  --border: #1f1f1f;
+  --input: #2e2e2e;
+  --ring: #52a8ff;
+  --info: #52a8ff;
+  --warning: #f5a524;
+  --success: #62c073;
 }
 
-body {
-  background:
-    radial-gradient(1200px 600px at 10% -10%, rgb(100 255 150 / 0.07), transparent 60%),
-    radial-gradient(900px 500px at 110% 10%, rgb(87 212 255 / 0.05), transparent 60%),
-    var(--color-bg);
-  color: var(--color-fg);
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "cv11";
+  }
+  ::selection {
+    background: #ededed;
+    color: #000;
+  }
 }
 
-::selection {
-  background: rgb(100 255 150 / 0.3);
+/* ---------- Backgrounds ---------- */
+
+.bg-dots {
+  background-image: radial-gradient(#ffffff26 1px, transparent 1px);
+  background-size: 22px 22px;
 }
 
-.prose-chat p { margin: 0.4em 0; }
-.prose-chat ul { list-style: disc; padding-left: 1.2em; margin: 0.4em 0; }
-.prose-chat ol { list-style: decimal; padding-left: 1.2em; margin: 0.4em 0; }
-.prose-chat li { margin: 0.2em 0; }
-.prose-chat strong { color: #f5f5ff; font-weight: 600; }
-.prose-chat blockquote { border-left: 2px solid var(--color-accent); padding-left: 0.8em; color: var(--color-muted); margin: 0.5em 0; }
-.prose-chat a { color: var(--color-accent); text-decoration: underline; }
-.prose-chat code { font-family: var(--font-mono); font-size: 0.85em; background: rgb(255 255 255 / 0.06); padding: 0.1em 0.3em; border-radius: 4px; }
-.prose-chat table { border-collapse: collapse; margin: 0.5em 0; font-size: 0.9em; }
-.prose-chat th, .prose-chat td { border: 1px solid var(--color-line); padding: 0.3em 0.6em; }
+.fade-mask-b {
+  mask-image: linear-gradient(to bottom, #000 20%, transparent 95%);
+}
+
+.fade-mask-radial {
+  mask-image: radial-gradient(ellipse 60% 70% at 70% 30%, #000 10%, transparent 75%);
+}
+
+/* ---------- Motion ---------- */
+
+@keyframes rise {
+  from {
+    transform: translateY(105%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes wave {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+/* A line of text sliding up from behind a mask. Wrap it in `.line-mask`. */
+.line-mask {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.08em;
+  margin-bottom: -0.08em;
+}
+
+@utility animate-rise {
+  display: block;
+  animation: rise 900ms var(--ease-out-expo) both;
+  animation-delay: var(--delay, 0ms);
+  @media (prefers-reduced-motion: reduce) {
+    animation: fade 300ms ease-out both;
+  }
+}
+
+@utility animate-enter {
+  animation: enter 700ms var(--ease-out-expo) both;
+  animation-delay: var(--delay, 0ms);
+  @media (prefers-reduced-motion: reduce) {
+    animation: fade 300ms ease-out both;
+  }
+}
+
+@utility animate-dot {
+  animation: dot 1.2s ease-in-out infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+@utility animate-blink {
+  animation: blink 1s steps(1) infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@utility animate-wave {
+  animation: wave 2.4s ease-in-out infinite;
+  animation-delay: var(--delay, 0ms);
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    opacity: 0.4;
+  }
+}
+
+/* Loading sweep on skeletons. */
+@utility skeleton-sweep {
+  position: relative;
+  overflow: hidden;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, #ffffff0d, transparent);
+    animation: shimmer 1.6s infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    &::after {
+      display: none;
+    }
+  }
+}
+
+/* ---------- Chat markdown ---------- */
+
+.prose-chat p { margin: 0.5em 0; }
+.prose-chat > :first-child { margin-top: 0; }
+.prose-chat > :last-child { margin-bottom: 0; }
+.prose-chat ul { list-style: disc; padding-left: 1.2em; margin: 0.5em 0; }
+.prose-chat ol { list-style: decimal; padding-left: 1.2em; margin: 0.5em 0; }
+.prose-chat li { margin: 0.3em 0; }
+.prose-chat li::marker { color: var(--subtle-foreground); }
+.prose-chat strong { color: var(--foreground); font-weight: 600; }
+.prose-chat blockquote { border-left: 2px solid var(--input); padding-left: 0.8em; color: var(--muted-foreground); margin: 0.6em 0; }
+.prose-chat a { color: var(--foreground); text-decoration: underline; text-decoration-color: var(--subtle-foreground); text-underline-offset: 3px; }
+.prose-chat code { font-family: var(--font-mono); font-size: 0.85em; background: var(--muted); padding: 0.1em 0.35em; border-radius: 4px; }
+.prose-chat table { border-collapse: collapse; margin: 0.6em 0; font-size: 0.9em; }
+.prose-chat th, .prose-chat td { border: 1px solid var(--border); padding: 0.3em 0.6em; }

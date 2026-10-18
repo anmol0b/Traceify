@@ -1,80 +1,99 @@
+import Link from "next/link";
+import { Section } from "@/components/Frame";
 import { HandleSearch } from "@/components/HandleSearch";
+import { Pipeline } from "@/components/home/Pipeline";
+import { ProductPreview } from "@/components/home/ProductPreview";
 
-const FEATURES = [
-  { icon: "𝕏", title: "Live X profiles", desc: "Bio, stats, and ~100 recent original tweets fetched and cached for 24 hours." },
-  { icon: "◎", title: "Semantic search", desc: "Tweets are embedded into pgvector, so each question pulls the most relevant posts." },
-  { icon: "◈", title: "Streaming AI chat", desc: "Grounded answers streamed token by token from Groq, quoting real tweets." },
-];
-
-const STEPS = [
-  { title: "Enter a handle", desc: "Type @username or paste an x.com profile URL." },
-  { title: "Review the profile", desc: "See stats, top tweets by likes and views, and engagement averages." },
-  { title: "Ask anything", desc: "Chat about their ideas, themes, and best-performing posts." },
+const FACTS = [
+  { value: "~100", label: "recent tweets read per profile" },
+  { value: "384-d", label: "embeddings searched with pgvector" },
+  { value: "24h", label: "cache before a profile is refetched" },
 ];
 
 const EXAMPLES = ["naval", "paulg", "karpathy"];
 
+const STACK = ["Next.js", "FastAPI", "Neon Postgres", "pgvector", "fastembed", "Groq"];
+
 export default function Home() {
   return (
-    <div className="space-y-20">
-      <section className="max-w-3xl space-y-6 pt-6">
-        <p className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.2em] text-accent">
-          <span className="size-1.5 rounded-full bg-accent" /> Public profile intelligence
-        </p>
-        <h1 className="font-serif text-5xl leading-[1.05] text-[#f5f5ff] sm:text-6xl">
-          Explore anyone&apos;s <em className="text-accent">digital footprint.</em>
-        </h1>
-        <p className="max-w-xl text-lg font-light text-muted">
-          Traceify loads a public X profile and its recent tweets, then lets you have a grounded AI conversation about
-          the person.
-        </p>
-        <div className="max-w-xl">
-          <HandleSearch />
-        </div>
-        <p className="font-mono text-xs text-faint">
-          Try:{" "}
-          {EXAMPLES.map((h, i) => (
-            <span key={h}>
-              <a href={`/x/${h}`} className="text-muted underline-offset-4 hover:text-accent hover:underline">
-                @{h}
-              </a>
-              {i < EXAMPLES.length - 1 && " · "}
-            </span>
-          ))}
-        </p>
-      </section>
-
-      <section aria-labelledby="features" className="space-y-5">
-        <h2 id="features" className="font-mono text-xs uppercase tracking-[0.15em] text-faint">
-          What it does
-        </h2>
-        <div className="grid gap-4 md:grid-cols-3">
-          {FEATURES.map((f) => (
-            <div key={f.title} className="rounded-xl border border-line bg-surface/60 p-5">
-              <div className="font-serif text-2xl text-accent">{f.icon}</div>
-              <h3 className="mt-3 font-medium text-[#f5f5ff]">{f.title}</h3>
-              <p className="mt-1 text-sm text-muted">{f.desc}</p>
+    <>
+      <Section id="trace" className="scroll-mt-16 overflow-hidden">
+        <div aria-hidden className="bg-dots fade-mask-radial absolute inset-0" />
+        <div className="relative grid gap-12 px-4 pt-16 pb-14 md:px-12 md:pt-28 md:pb-20 lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-end">
+          <div className="max-w-2xl">
+            <h1 className="text-[2.75rem] leading-[1.02] font-semibold tracking-[-0.05em] sm:text-6xl md:text-[4.5rem]">
+              <span className="line-mask">
+                <span className="animate-rise">Explore anyone&apos;s</span>
+              </span>
+              <span className="line-mask">
+                <span className="animate-rise text-muted-foreground [--delay:90ms]">digital footprint.</span>
+              </span>
+            </h1>
+            <p className="animate-enter mt-6 max-w-lg text-lg leading-relaxed text-pretty text-muted-foreground [--delay:250ms]">
+              Traceify loads a public X profile and its recent tweets, then lets you have a grounded AI conversation
+              about the person.
+            </p>
+            <div className="animate-enter mt-10 max-w-md [--delay:350ms]">
+              <HandleSearch />
             </div>
-          ))}
-        </div>
-      </section>
+            <p className="animate-enter mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 pl-5 text-sm text-subtle-foreground [--delay:450ms]">
+              Try
+              {EXAMPLES.map((h) => (
+                <Link
+                  key={h}
+                  href={`/x/${h}`}
+                  className="rounded-sm py-1 font-mono text-muted-foreground underline decoration-[#333] underline-offset-4 transition-colors duration-150 outline-none hover:text-foreground hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  @{h}
+                </Link>
+              ))}
+            </p>
+          </div>
 
-      <section aria-labelledby="how" className="space-y-5">
-        <h2 id="how" className="font-mono text-xs uppercase tracking-[0.15em] text-faint">
-          How to use
-        </h2>
-        <ol className="grid gap-4 md:grid-cols-3">
-          {STEPS.map((s, i) => (
-            <li key={s.title} className="flex gap-4">
-              <span className="font-mono text-sm text-accent">{String(i + 1).padStart(2, "0")}</span>
-              <div>
-                <h3 className="font-medium text-[#f5f5ff]">{s.title}</h3>
-                <p className="mt-1 text-sm text-muted">{s.desc}</p>
+          <dl className="animate-enter grid grid-cols-3 gap-4 border-t pt-6 [--delay:550ms] lg:grid-cols-1 lg:gap-0 lg:divide-y lg:border-t-0 lg:pt-0">
+            {FACTS.map((f) => (
+              <div key={f.value} className="flex flex-col lg:py-4 lg:last:pb-0">
+                <dt className="text-xs leading-snug text-muted-foreground md:text-sm">{f.label}</dt>
+                <dd className="order-first text-2xl font-semibold tracking-[-0.04em] text-foreground md:text-3xl">{f.value}</dd>
               </div>
-            </li>
-          ))}
-        </ol>
-      </section>
-    </div>
+            ))}
+          </dl>
+        </div>
+      </Section>
+
+      <Section aria-label="Product preview" className="overflow-hidden">
+        <ProductPreview />
+      </Section>
+
+      <Section id="how-it-works" aria-labelledby="how-it-works-title" className="scroll-mt-16">
+        <div className="px-4 py-16 md:px-12 md:py-24">
+          <h2 id="how-it-works-title" className="max-w-3xl text-3xl leading-[1.1] font-semibold tracking-[-0.04em] text-balance md:text-[2.75rem]">
+            From a handle to a grounded answer.{" "}
+            <span className="text-muted-foreground">
+              Every question is matched against the person&apos;s own tweets before a reply is written.
+            </span>
+          </h2>
+        </div>
+        <Pipeline />
+      </Section>
+
+      <Section id="stack" aria-labelledby="stack-title" className="scroll-mt-16">
+        <div className="grid md:grid-cols-[14rem_minmax(0,1fr)]">
+          <h2 id="stack-title" className="flex items-center px-4 py-6 text-sm text-muted-foreground md:border-r md:px-12 md:py-0">
+            Built with
+          </h2>
+          <ul className="grid grid-cols-2 gap-px border-t bg-border sm:grid-cols-3 md:border-t-0 lg:grid-cols-6">
+            {STACK.map((name) => (
+              <li
+                key={name}
+                className="grid h-20 place-items-center bg-background px-3 text-center text-[15px] font-medium tracking-[-0.01em] text-muted-foreground transition-colors duration-150 hover:text-foreground"
+              >
+                {name}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </Section>
+    </>
   );
 }
