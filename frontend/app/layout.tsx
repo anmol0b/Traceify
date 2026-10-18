@@ -33,7 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </header>
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-12">{children}</main>
         <footer className="border-t border-line py-6 text-center font-mono text-xs text-faint">
-          Public data only · Built with FastAPI, Next.js, Supabase pgvector &amp; Groq
+          Public data only · Built with FastAPI, Next.js, Neon pgvector &amp; Groq
         </footer>
       </body>
     </html>
