@@ -1,23 +1,75 @@
 "use client";
 
-import { ArrowUp, ArrowUpRight, CircleAlert, LoaderCircle } from "lucide-react";
+import { ArrowUp, ArrowUpRight, CircleAlert, LoaderCircle, ThumbsDown, ThumbsUp } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { LogoMark } from "@/components/Brand";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { ApiError, streamChat } from "@/lib/api";
-import type { ChatMessage } from "@/lib/types";
+import { ApiError, sendFeedback, streamChat } from "@/lib/api";
+import { linkCitations } from "@/lib/citations";
+import type { ChatMessage, Rating, Tweet } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const SESSION_QUESTION_CAP = 30;
 
-type Props = { handle: string; starter: string; suggestions: string[] };
+type Props = { handle: string; starter: string; suggestions: string[]; tweets: Tweet[] };
 
-export function ChatPanel({ handle, starter, suggestions }: Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>([{ role: "assistant", content: starter }]);
+type Message = ChatMessage & { requestId?: string; question?: string; rating?: Rating };
+
+const MARKDOWN_COMPONENTS: Components = {
+  a: ({ href, title, children }) => {
+    const citation = typeof children === "string" && /^T\d+$/.test(children);
+    return (
+      <a
+        href={href}
+        title={title ?? undefined}
+        target="_blank"
+        rel="noreferrer noopener"
+        className={cn(
+          citation &&
+            "mx-0.5 inline-flex h-5 items-center rounded-md border bg-surface px-1.5 align-[1px] font-mono text-[11px] no-underline text-muted-foreground transition-colors hover:border-input hover:text-foreground",
+        )}
+      >
+        {children}
+      </a>
+    );
+  },
+};
+
+function Feedback({ message, onRate }: { message: Message; onRate: (rating: Rating) => void }) {
+  return (
+    <div className="mt-2 flex items-center gap-1 text-subtle-foreground">
+      {(["up", "down"] as const).map((rating) => {
+        const Icon = rating === "up" ? ThumbsUp : ThumbsDown;
+        const active = message.rating === rating;
+        return (
+          <button
+            key={rating}
+            type="button"
+            onClick={() => onRate(rating)}
+            disabled={Boolean(message.rating)}
+            aria-pressed={active}
+            aria-label={rating === "up" ? "Good answer" : "Bad answer"}
+            className={cn(
+              "grid size-7 place-items-center rounded-md transition-colors outline-none hover:bg-surface hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:hover:bg-transparent",
+              active && "text-foreground",
+              message.rating && !active && "opacity-40",
+            )}
+          >
+            <Icon aria-hidden className="size-3.5" />
+          </button>
+        );
+      })}
+      {message.rating && <span className="animate-enter ml-1 text-xs">Thanks for the feedback</span>}
+    </div>
+  );
+}
+
+export function ChatPanel({ handle, starter, suggestions, tweets }: Props) {
+  const [messages, setMessages] = useState<Message[]>([{ role: "assistant", content: starter }]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +100,7 @@ export function ChatPanel({ handle, starter, suggestions }: Props) {
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      await streamChat(
+      const requestId = await streamChat(
         handle,
         q,
         history,
@@ -61,6 +113,13 @@ export function ChatPanel({ handle, starter, suggestions }: Props) {
           }),
         controller.signal,
       );
+      if (requestId) {
+        setMessages((prev) => {
+          const next = prev.slice();
+          next[next.length - 1] = { ...next[next.length - 1], requestId, question: q };
+          return next;
+        });
+      }
     } catch (err) {
       if (controller.signal.aborted) return;
       setMessages((prev) => (prev[prev.length - 1]?.content === "" ? prev.slice(0, -2) : prev));
@@ -69,6 +128,21 @@ export function ChatPanel({ handle, starter, suggestions }: Props) {
     } finally {
       setStreaming(false);
     }
+  }
+
+  function rate(index: number, rating: Rating) {
+    const message = messages[index];
+    if (!message.requestId || message.rating) return;
+    setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, rating } : m)));
+    sendFeedback({
+      request_id: message.requestId,
+      handle,
+      rating,
+      question: message.question ?? "",
+      answer: message.content,
+    }).catch(() => {
+      // Feedback is best-effort; the thumbs stay set so the user isn't asked twice.
+    });
   }
 
   const showSuggestions = messages.length === 1 && suggestions.length > 0;
@@ -112,7 +186,14 @@ export function ChatPanel({ handle, starter, suggestions }: Props) {
             >
               {m.role === "assistant" ? (
                 m.content ? (
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                  <>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+                      {linkCitations(m.content, tweets, handle)}
+                    </ReactMarkdown>
+                    {m.requestId && !(streaming && i === messages.length - 1) && (
+                      <Feedback message={m} onRate={(rating) => rate(i, rating)} />
+                    )}
+                  </>
                 ) : (
                   <span role="status" className="inline-flex h-6 items-center gap-1" aria-label="Thinking">
                     <span className="animate-dot size-1.5 rounded-full bg-foreground" />

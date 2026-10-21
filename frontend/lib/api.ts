@@ -1,4 +1,4 @@
-import type { ChatMessage, ProfileResponse } from "./types";
+import type { ChatMessage, ProfileResponse, Rating } from "./types";
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
@@ -43,23 +43,24 @@ export async function refreshProfile(handle: string): Promise<ProfileResponse> {
   return (await request(`/api/profiles/${encodeURIComponent(handle)}/refresh`, { method: "POST" })).json();
 }
 
-/** POST a question and stream the plain-text answer chunk by chunk. */
+/** POST a question and stream the plain-text answer chunk by chunk. Resolves to the answer's request id. */
 export async function streamChat(
   handle: string,
   question: string,
   history: ChatMessage[],
   onChunk: (text: string) => void,
   signal?: AbortSignal,
-): Promise<void> {
+): Promise<string | null> {
   const res = await request("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ handle, question, history }),
+    body: JSON.stringify({ handle, question, history: history.map(({ role, content }) => ({ role, content })) }),
     signal,
   });
+  const requestId = res.headers.get("X-Request-Id");
   if (!res.body) {
     onChunk(await res.text());
-    return;
+    return requestId;
   }
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -70,6 +71,21 @@ export async function streamChat(
   }
   const tail = decoder.decode();
   if (tail) onChunk(tail);
+  return requestId;
+}
+
+export async function sendFeedback(feedback: {
+  request_id: string;
+  handle: string;
+  rating: Rating;
+  question: string;
+  answer: string;
+}): Promise<void> {
+  await request("/api/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...feedback, question: feedback.question.slice(0, 1000), answer: feedback.answer.slice(0, 8000) }),
+  });
 }
 
 export function formatCount(value: number | null | undefined): string {
