@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 
-from app.schemas import Tweet
+from app.schemas import FeedbackRequest, Tweet
 from app.services.repo import Repo
 
 
@@ -51,11 +51,6 @@ class FakePool:
         yield self.conn
 
 
-class FakeEmbedder:
-    def embed(self, texts):
-        return [[0.1, 0.2, 0.3] for _ in texts]
-
-
 def test_cache_respects_ttl(profile):
     fresh = datetime.now(UTC)
     stale = datetime.now(UTC) - timedelta(hours=48)
@@ -63,6 +58,12 @@ def test_cache_respects_ttl(profile):
 
     assert Repo(FakePool([{"raw_json": raw, "fetched_at": fresh}])).get_cached_profile("naval") == profile
     assert Repo(FakePool([{"raw_json": raw, "fetched_at": stale}])).get_cached_profile("naval") is None
+
+
+def test_cache_from_older_schema_version_is_ignored(profile):
+    raw = profile.model_dump(mode="json") | {"schema_version": 1}
+    repo = Repo(FakePool([{"raw_json": raw, "fetched_at": datetime.now(UTC)}]))
+    assert repo.get_cached_profile("naval") is None
 
 
 def test_outdated_cache_shape_is_ignored():
@@ -73,8 +74,8 @@ def test_outdated_cache_shape_is_ignored():
 
 def test_save_tweets_sends_pgvector_literals():
     pool = FakePool()
-    repo = Repo(pool, embedder_factory=FakeEmbedder)
-    repo.save_tweets("Naval", [Tweet(id="1", text="hello"), Tweet(id="2", text="world")])
+    repo = Repo(pool)
+    repo.save_tweets("Naval", [Tweet(id="1", text="hello"), Tweet(id="2", text="world")], [[0.1, 0.2, 0.3]] * 2)
 
     sql, rows = pool.conn.calls[0]
     assert "on conflict (id)" in sql
@@ -82,17 +83,36 @@ def test_save_tweets_sends_pgvector_literals():
     assert rows[0]["embedding"] == "[0.1,0.2,0.3]"
 
 
-def test_search_tweets_filters_by_lowercased_handle():
-    pool = FakePool([{"text": "hi", "likes": 1, "views": 2, "similarity": 0.9}])
-    results = Repo(pool, embedder_factory=FakeEmbedder).search_tweets("Naval", "question", limit=3)
+def test_save_tweets_without_embeddings_stores_null_vectors():
+    pool = FakePool()
+    Repo(pool).save_tweets("naval", [Tweet(id="1", text="hello")], None)
+    _, rows = pool.conn.calls[0]
+    assert rows[0]["embedding"] is None
 
-    assert results[0]["text"] == "hi"
-    _, params = pool.conn.calls[0]
-    assert params == {"query": "[0.1,0.2,0.3]", "handle": "naval", "limit": 3}
+
+def test_search_tweets_is_limited_to_current_tweet_ids():
+    pool = FakePool([{"id": "1", "similarity": 0.9}])
+    results = Repo(pool).search_tweets("Naval", [0.1, 0.2, 0.3], ["1", "2"], limit=3)
+
+    assert results == [{"id": "1", "similarity": 0.9}]
+    sql, params = pool.conn.calls[0]
+    assert "id = any(%(ids)s)" in sql
+    assert params == {"query": "[0.1,0.2,0.3]", "handle": "naval", "ids": ["1", "2"], "limit": 3}
+
+
+def test_save_feedback_records_prompt_version():
+    pool = FakePool()
+    feedback = FeedbackRequest(request_id="abc", handle="Naval", rating="down", question="q", answer="a")
+    Repo(pool).save_feedback(feedback, "v1")
+    sql, params = pool.conn.calls[0]
+    assert "insert into feedback" in sql
+    assert params["handle"] == "naval"
+    assert params["prompt_version"] == "v1"
+    assert params["rating"] == "down"
 
 
 def test_disabled_repo_is_noop(profile):
     repo = Repo(None)
     assert repo.get_cached_profile("naval") is None
-    assert repo.search_tweets("naval", "q") == []
+    assert repo.search_tweets("naval", [0.1], ["1"]) == []
     repo.save_profile(profile)

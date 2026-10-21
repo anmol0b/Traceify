@@ -17,17 +17,15 @@ log = logging.getLogger("traceify")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    settings = get_settings()
-    if settings.db_enabled:
-        # Open the database pool and embedding model so the first request isn't slow.
-        from .services.embeddings import get_embedder
-        from .services.repo import get_repo
+    # Open the database pool and load the embedding model so the first request isn't slow.
+    from .services.embeddings import get_embedder
+    from .services.repo import get_repo
 
-        get_repo()
-        try:
-            get_embedder()
-        except Exception:
-            log.exception("Could not load embedding model; semantic search will be unavailable")
+    get_repo()
+    try:
+        get_embedder()
+    except Exception:
+        log.exception("Could not load embedding model; semantic search will be unavailable")
     yield
 
 
@@ -40,6 +38,7 @@ def create_app() -> FastAPI:
         allow_origins=settings.cors_origins,
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"],
+        expose_headers=["X-Request-Id"],  # the frontend sends it back with answer feedback
     )
 
     @app.exception_handler(TraceifyError)

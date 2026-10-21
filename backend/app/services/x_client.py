@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import logging
+import re
+import statistics
+from collections import Counter
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -16,6 +21,37 @@ log = logging.getLogger(__name__)
 
 API_HOST = "twitter241.p.rapidapi.com"
 BASE_URL = f"https://{API_HOST}"
+X_DATE_FORMAT = "%a %b %d %H:%M:%S %z %Y"  # e.g. "Wed Oct 10 20:19:24 +0000 2018"
+_TCO = re.compile(r"https://t\.co/\w+")
+_WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def parse_x_date(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, X_DATE_FORMAT)
+    except ValueError:
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+
+def clean_tweet_text(legacy: dict[str, Any]) -> tuple[str, bool]:
+    """Expand t.co links, drop media links, unescape HTML entities. Returns (text, has_media)."""
+    text = legacy.get("full_text") or ""
+    entities = legacy.get("entities") or {}
+    for url in entities.get("urls") or []:
+        if url.get("url"):
+            text = text.replace(url["url"], url.get("expanded_url") or url.get("display_url") or "")
+    media = (legacy.get("extended_entities") or {}).get("media") or entities.get("media") or []
+    for item in media:
+        if item.get("url"):
+            text = text.replace(item["url"], "")
+    # Any t.co link still left points at media or a quoted tweet and means nothing to a reader.
+    text = _TCO.sub("", text)
+    return html.unescape(re.sub(r"[ \t]+\n", "\n", text)).strip(), bool(media)
 
 
 class XClient:
@@ -130,10 +166,12 @@ def parse_timeline(data: dict[str, Any], handle: str) -> tuple[list[Tweet], str 
             if item.get("__typename") == "TweetWithVisibilityResults":
                 item = item.get("tweet", {})
             legacy = item.get("legacy", {})
-            text = (legacy.get("full_text") or "").strip()
-
-            if not text or text.startswith("RT ") or legacy.get("in_reply_to_status_id_str"):
+            raw_text = (legacy.get("full_text") or "").strip()
+            if not raw_text or raw_text.startswith("RT ") or legacy.get("in_reply_to_status_id_str"):
                 continue
+            text, has_media = clean_tweet_text(legacy)
+            if not text:
+                text = "[media only, no text]"
 
             tweet_id = item.get("rest_id") or legacy.get("id_str")
             if not tweet_id:
@@ -147,6 +185,7 @@ def parse_timeline(data: dict[str, Any], handle: str) -> tuple[list[Tweet], str 
                     views=int((item.get("views") or {}).get("count", 0) or 0),
                     retweets=legacy.get("retweet_count", 0) or 0,
                     created_at=legacy.get("created_at", ""),
+                    has_media=has_media,
                 )
             )
 
@@ -160,16 +199,45 @@ def build_tweet_insights(tweets: list[Tweet]) -> TweetInsights:
     def stat(t: Tweet) -> TweetStat:
         return TweetStat(text=t.text[:280], likes=t.likes, views=t.views)
 
-    return TweetInsights(
+    insights = TweetInsights(
         total_analyzed=len(tweets),
         avg_likes=sum(t.likes for t in tweets) // len(tweets),
         avg_views=sum(t.views for t in tweets) // len(tweets),
+        median_likes=int(statistics.median(t.likes for t in tweets)),
+        median_views=int(statistics.median(t.views for t in tweets)),
         top_by_views=[stat(t) for t in sorted(tweets, key=lambda t: t.views, reverse=True)[:5]],
         top_by_likes=[stat(t) for t in sorted(tweets, key=lambda t: t.likes, reverse=True)[:5]],
     )
 
+    dates = sorted(d for d in (parse_x_date(t.created_at) for t in tweets) if d)
+    if dates:
+        insights.first_tweet_at = dates[0].date().isoformat()
+        insights.last_tweet_at = dates[-1].date().isoformat()
+    if len(dates) >= 2:
+        span_days = (dates[-1] - dates[0]).total_seconds() / 86400
+        if span_days >= 1:
+            insights.posts_per_week = round((len(dates) - 1) / span_days * 7, 1)
+    if len(dates) >= 5:
+        insights.most_active_weekday = _WEEKDAYS[Counter(d.weekday() for d in dates).most_common(1)[0][0]]
+        insights.most_active_hour_utc = Counter(d.hour for d in dates).most_common(1)[0][0]
+    return insights
+
+
+def sort_newest_first(tweets: list[Tweet]) -> list[Tweet]:
+    """Pinned tweets come first in the timeline, so order by date when every tweet has one."""
+    dates = [parse_x_date(t.created_at) for t in tweets]
+    if not tweets or any(d is None for d in dates):
+        return tweets
+    return [t for _, t in sorted(zip(dates, tweets, strict=True), key=lambda pair: pair[0], reverse=True)]
+
 
 def attach_tweets(profile: Profile, tweets: list[Tweet]) -> Profile:
+    # Pages can overlap (and a pinned tweet can repeat), so keep each tweet once.
+    unique: dict[str, Tweet] = {}
+    for t in tweets:
+        unique.setdefault(t.id, t)
+    tweets = sort_newest_first(list(unique.values()))
+    profile.tweets = tweets
     profile.recent_posts = [t.text for t in tweets[:10]]
     profile.insights = build_tweet_insights(tweets)
     profile.summary = build_profile_summary(profile)

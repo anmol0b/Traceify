@@ -22,14 +22,14 @@ class FakeRepo:
         self.saved.append(("profile", profile.handle))
         self.profiles[profile.handle.lower()] = profile
 
-    def save_tweets(self, handle, tweets):
+    def save_tweets(self, handle, tweets, embeddings):
         self.saved.append(("tweets", handle))
 
     def delete_profile(self, handle):
         self.profiles.pop(handle.lower(), None)
 
-    def search_tweets(self, handle, query, limit=5):
-        return [{"text": "Seek wealth", "likes": 1, "views": 2}]
+    def save_feedback(self, feedback, prompt_version):
+        self.saved.append(("feedback", feedback.request_id))
 
 
 class FakeX:
@@ -52,7 +52,7 @@ class FakeX:
 def make_client(settings):
     def _make(x):
         repo = FakeRepo()
-        service = ProfileService(repo, x)
+        service = ProfileService(repo, x, settings=settings)
         app = create_app()
         app.dependency_overrides[get_profile_service] = lambda: service
         app.dependency_overrides[get_settings] = lambda: settings
@@ -109,6 +109,27 @@ def test_chat_streams_fallback_answer(make_client, profile):
     response = client.post("/api/chat", json={"handle": "naval", "question": "where are they based?", "history": []})
     assert response.status_code == 200
     assert "San Francisco" in response.text
+
+
+def test_chat_returns_a_request_id(make_client, profile):
+    client, _, _ = make_client(FakeX(profile))
+    response = client.post("/api/chat", json={"handle": "naval", "question": "followers?", "history": []})
+    assert len(response.headers["x-request-id"]) == 32
+
+
+def test_profile_uses_generated_suggested_questions(make_client, profile):
+    profile.suggested_questions = ["Why does Naval prefer wealth to status?"] * 4
+    client, _, _ = make_client(FakeX(profile))
+    body = client.get("/api/profiles/naval").json()
+    assert body["suggested_questions"][0] == "Why does Naval prefer wealth to status?"
+
+
+def test_feedback_is_stored(make_client, profile):
+    client, repo, _ = make_client(FakeX(profile))
+    payload = {"request_id": "abc123", "handle": "naval", "rating": "up", "question": "q", "answer": "a"}
+    assert client.post("/api/feedback", json=payload).status_code == 204
+    assert ("feedback", "abc123") in repo.saved
+    assert client.post("/api/feedback", json={**payload, "rating": "meh"}).status_code == 422
 
 
 def test_chat_rate_limit(make_client, profile, settings):

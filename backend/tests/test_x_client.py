@@ -2,7 +2,8 @@ import httpx
 import pytest
 
 from app.errors import NotConfigured, PrivateAccount, ProfileNotFound, UpstreamError, UpstreamRateLimit
-from app.services.x_client import XClient, build_tweet_insights, parse_timeline
+from app.schemas import Profile, Tweet
+from app.services.x_client import XClient, attach_tweets, build_tweet_insights, clean_tweet_text, parse_timeline
 
 from .conftest import load_fixture, mock_http
 
@@ -90,3 +91,38 @@ def test_build_tweet_insights():
     assert insights.top_by_likes[0].likes == 500
     assert insights.top_by_views[0].views == 5000
     assert build_tweet_insights([]).total_analyzed == 0
+
+
+def test_clean_tweet_text_expands_links_and_drops_media():
+    legacy = {
+        "full_text": "New essay &amp; notes https://t.co/abc https://t.co/img",
+        "entities": {
+            "urls": [{"url": "https://t.co/abc", "expanded_url": "https://nav.al/essay"}],
+            "media": [{"url": "https://t.co/img"}],
+        },
+    }
+    assert clean_tweet_text(legacy) == ("New essay & notes https://nav.al/essay", True)
+    assert clean_tweet_text({"full_text": "Quote https://t.co/zzz"}) == ("Quote", False)
+
+
+def test_insights_include_medians_dates_and_rates():
+    tweets = [
+        Tweet(id=str(i), text="t", likes=likes, views=likes * 10, created_at=f"Mon Oct {6 + i:02d} 15:00:00 +0000 2025")
+        for i, likes in enumerate([1, 2, 3, 100, 4, 5, 6, 7])
+    ]
+    insights = build_tweet_insights(tweets)
+    assert insights.median_likes == 4
+    assert insights.avg_likes == 16
+    assert insights.first_tweet_at == "2025-10-06"
+    assert insights.last_tweet_at == "2025-10-13"
+    assert insights.posts_per_week == 7.0
+    assert insights.most_active_hour_utc == 15
+
+
+def test_attach_tweets_dedupes_and_sorts_newest_first():
+    profile = Profile(handle="naval", display_name="Naval", public_url="https://x.com/naval")
+    pinned = Tweet(id="1", text="old pinned", created_at="Mon Jan 06 10:00:00 +0000 2020")
+    newer = Tweet(id="2", text="new", created_at="Mon Oct 13 10:00:00 +0000 2025")
+    attach_tweets(profile, [pinned, newer, pinned])
+    assert [t.id for t in profile.tweets] == ["2", "1"]
+    assert profile.recent_posts == ["new", "old pinned"]
