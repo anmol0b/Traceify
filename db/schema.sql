@@ -34,3 +34,18 @@ create table if not exists tweets (
 
 create index if not exists tweets_handle_idx on tweets (handle);
 create index if not exists tweets_embedding_idx on tweets using hnsw (embedding vector_cosine_ops);
+
+-- Thumbs up/down on chat answers, keyed by the X-Request-Id of the /api/chat response.
+create table if not exists feedback (
+    id             bigserial primary key,
+    request_id     text not null,
+    handle         text not null,
+    rating         text not null check (rating in ('up', 'down')),
+    question       text,
+    answer         text,
+    comment        text,
+    prompt_version text,
+    created_at     timestamptz not null default now()
+);
+
+create index if not exists feedback_created_at_idx on feedback (created_at desc);

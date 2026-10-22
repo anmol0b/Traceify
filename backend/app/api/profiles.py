@@ -14,7 +14,7 @@ def _response(profile, from_cache: bool) -> ProfileResponse:
         profile=profile,
         from_cache=from_cache,
         starter_message=starter_message(profile, from_cache),
-        suggested_questions=suggested_questions(profile),
+        suggested_questions=profile.suggested_questions or suggested_questions(profile),
     )
 
 

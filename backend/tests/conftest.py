@@ -8,7 +8,7 @@ import pytest
 
 from app.config import Settings
 from app.rate_limit import limiter
-from app.schemas import Profile, TweetInsights, TweetStat
+from app.schemas import PROFILE_SCHEMA_VERSION, Profile, Tweet, TweetInsights, TweetStat
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -30,7 +30,28 @@ def settings() -> Settings:
 
 
 @pytest.fixture
-def profile() -> Profile:
+def tweets() -> list[Tweet]:
+    return [
+        Tweet(
+            id="200",
+            text="Play long-term games with long-term people.",
+            likes=100,
+            views=5000,
+            created_at="Tue Oct 14 18:00:00 +0000 2025",
+        ),
+        Tweet(
+            id="100",
+            text="Seek wealth, not money or status.",
+            likes=500,
+            views=1000,
+            created_at="Mon Oct 13 09:30:00 +0000 2025",
+            has_media=True,
+        ),
+    ]
+
+
+@pytest.fixture
+def profile(tweets) -> Profile:
     return Profile(
         handle="naval",
         display_name="Naval",
@@ -42,15 +63,38 @@ def profile() -> Profile:
         is_verified=True,
         public_url="https://x.com/naval",
         recent_posts=["Seek wealth, not money or status.", "Play long-term games with long-term people."],
+        tweets=tweets,
+        schema_version=PROFILE_SCHEMA_VERSION,
         insights=TweetInsights(
             total_analyzed=2,
             avg_likes=300,
             avg_views=3000,
+            median_likes=300,
+            median_views=3000,
+            first_tweet_at="2025-10-13",
+            last_tweet_at="2025-10-14",
             top_by_likes=[TweetStat(text="Seek wealth, not money or status.", likes=500, views=1000)],
             top_by_views=[TweetStat(text="Play long-term games with long-term people.", likes=100, views=5000)],
         ),
         summary="Naval is an angel investor.",
     )
+
+
+class FakeEmbedder:
+    """Deterministic bag-of-words embedder: texts sharing words get similar vectors."""
+
+    VOCAB = ("wealth", "money", "status", "games", "people", "long-term", "ai", "startups", "code", "music")
+
+    def embed(self, texts):
+        return [self._vector(t) for t in texts]
+
+    def embed_query(self, query):
+        return self._vector(query)
+
+    def _vector(self, text):
+        words = text.lower().replace(",", " ").replace(".", " ").replace("?", " ").split()
+        vector = [float(words.count(w)) for w in self.VOCAB]
+        return vector if any(vector) else [0.0] * (len(self.VOCAB) - 1) + [0.01]
 
 
 def mock_http(routes: dict[str, httpx.Response | list[httpx.Response]]) -> httpx.Client:

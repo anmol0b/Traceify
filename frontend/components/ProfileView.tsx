@@ -27,6 +27,7 @@ import type { ProfileResponse } from "@/lib/types";
 import { ChatPanel } from "./ChatPanel";
 import { HandleSearch } from "./HandleSearch";
 import { ProfileCard } from "./ProfileCard";
+import { TopicList } from "./TopicList";
 import { TweetInsights } from "./TweetInsights";
 
 type State =
@@ -176,6 +177,7 @@ export function ProfileView({ handle }: { handle: string }) {
       <div className={COLUMNS}>
         <div className="animate-enter min-w-0 lg:border-r">
           <ProfileCard profile={data.profile} />
+          <TopicList topics={data.profile.topics ?? []} />
           <TweetInsights insights={data.profile.insights} />
         </div>
         <div className="animate-enter border-t [--delay:100ms] lg:border-t-0">
@@ -185,6 +187,7 @@ export function ProfileView({ handle }: { handle: string }) {
               handle={data.profile.handle}
               starter={data.starter_message}
               suggestions={data.suggested_questions}
+              tweets={data.profile.tweets ?? []}
             />
           </div>
         </div>

@@ -77,6 +77,10 @@ def starter_message(profile: Profile, from_cache: bool = False) -> str:
         parts.append("✓ Blue verified account.")
     if profile.insights.total_analyzed:
         parts.append(f"I've analyzed **{profile.insights.total_analyzed}** of their recent tweets.")
+    if profile.topics:
+        labels = [f"**{t.label}**" for t in profile.topics[:3]]
+        joined = labels[0] if len(labels) == 1 else ", ".join(labels[:-1]) + f" and {labels[-1]}"
+        parts.append(f"They mostly tweet about {joined}.")
     if from_cache:
         parts.append("_(loaded from cache)_")
     parts.append("\n\nWhat would you like to know about them?")

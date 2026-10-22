@@ -10,8 +10,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from ..config import get_settings
-from ..schemas import Profile, Tweet
-from .embeddings import Embedder, get_embedder
+from ..schemas import PROFILE_SCHEMA_VERSION, FeedbackRequest, Profile, Tweet
 
 log = logging.getLogger(__name__)
 
@@ -35,13 +34,19 @@ on conflict (id) do update set
     embedding = excluded.embedding, fetched_at = now()
 """
 
-# Cosine distance (<=>) uses the HNSW index on tweets.embedding.
+# Cosine distance (<=>). Restricted to the profile's current tweet set, so tweets left over from
+# earlier fetches can't be cited with IDs the prompt doesn't contain.
 SEARCH_TWEETS = """
-select text, likes, views, 1 - (embedding <=> %(query)s::vector) as similarity
+select id, 1 - (embedding <=> %(query)s::vector) as similarity
 from tweets
-where handle = %(handle)s
+where handle = %(handle)s and id = any(%(ids)s) and embedding is not null
 order by embedding <=> %(query)s::vector
 limit %(limit)s
+"""
+
+INSERT_FEEDBACK = """
+insert into feedback (request_id, handle, rating, question, answer, comment, prompt_version)
+values (%(request_id)s, %(handle)s, %(rating)s, %(question)s, %(answer)s, %(comment)s, %(prompt_version)s)
 """
 
 
@@ -51,18 +56,13 @@ def _vector(values: list[float]) -> str:
 
 
 class Repo:
-    def __init__(self, pool: Any | None, embedder_factory=get_embedder, ttl_hours: int = 24):
+    def __init__(self, pool: Any | None, ttl_hours: int = 24):
         self.pool = pool
-        self._embedder_factory = embedder_factory
         self.ttl = timedelta(hours=ttl_hours)
 
     @property
     def enabled(self) -> bool:
         return self.pool is not None
-
-    @property
-    def embedder(self) -> Embedder:
-        return self._embedder_factory()
 
     # ── Profiles ──────────────────────────────────────────────────────────────
 
@@ -81,10 +81,14 @@ class Repo:
         if not row or self._is_stale(row["fetched_at"]):
             return None
         try:
-            return Profile.model_validate(row["raw_json"])
+            profile = Profile.model_validate(row["raw_json"])
         except Exception:
             log.warning("Cached profile for @%s has an outdated shape; refetching", handle)
             return None
+        if profile.schema_version < PROFILE_SCHEMA_VERSION:
+            log.info("Cached profile for @%s predates schema v%d; refetching", handle, PROFILE_SCHEMA_VERSION)
+            return None
+        return profile
 
     def save_profile(self, profile: Profile) -> None:
         if not self.enabled:
@@ -123,12 +127,12 @@ class Repo:
 
     # ── Tweets ────────────────────────────────────────────────────────────────
 
-    def save_tweets(self, handle: str, tweets: list[Tweet]) -> None:
-        """Embed and store tweets. The profile row must already exist (FK on tweets.handle)."""
+    def save_tweets(self, handle: str, tweets: list[Tweet], embeddings: list[list[float]] | None) -> None:
+        """Store tweets with their embeddings. The profile row must already exist (FK on tweets.handle)."""
         if not self.enabled or not tweets:
             return
         try:
-            embeddings = self.embedder.embed([t.text for t in tweets])
+            vectors = embeddings if embeddings and len(embeddings) == len(tweets) else [None] * len(tweets)
             rows = [
                 {
                     "id": t.id,
@@ -138,9 +142,9 @@ class Repo:
                     "views": t.views,
                     "retweets": t.retweets,
                     "created_at": t.created_at,
-                    "embedding": _vector(embedding),
+                    "embedding": _vector(embedding) if embedding else None,
                 }
-                for t, embedding in zip(tweets, embeddings, strict=True)
+                for t, embedding in zip(tweets, vectors, strict=True)
             ]
             # One transaction, one round trip per batch.
             with self.pool.connection() as conn, conn.transaction(), conn.cursor() as cur:
@@ -149,18 +153,31 @@ class Repo:
         except Exception:
             log.exception("Failed to save tweets for @%s", handle)
 
-    def search_tweets(self, handle: str, query: str, limit: int = 5) -> list[dict[str, Any]]:
+    def search_tweets(
+        self, handle: str, query_embedding: list[float], tweet_ids: list[str], limit: int = 8
+    ) -> list[dict[str, Any]]:
+        """Nearest tweets by cosine similarity, as rows of {id, similarity}. Raises on database errors."""
+        if not self.enabled or not tweet_ids:
+            return []
+        with self.pool.connection() as conn:
+            return conn.execute(
+                SEARCH_TWEETS,
+                {"query": _vector(query_embedding), "handle": handle.lower(), "ids": tweet_ids, "limit": limit},
+            ).fetchall()
+
+    # ── Feedback ──────────────────────────────────────────────────────────────
+
+    def save_feedback(self, feedback: FeedbackRequest, prompt_version: str) -> None:
         if not self.enabled:
-            return []
+            return
         try:
-            query_embedding = _vector(self.embedder.embed([query])[0])
             with self.pool.connection() as conn:
-                return conn.execute(
-                    SEARCH_TWEETS, {"query": query_embedding, "handle": handle.lower(), "limit": limit}
-                ).fetchall()
+                conn.execute(
+                    INSERT_FEEDBACK,
+                    {**feedback.model_dump(), "handle": feedback.handle.lower(), "prompt_version": prompt_version},
+                )
         except Exception:
-            log.exception("Semantic search failed for @%s", handle)
-            return []
+            log.exception("Failed to save feedback for request %s", feedback.request_id)
 
     def _is_stale(self, fetched_at: datetime | str | None) -> bool:
         if not fetched_at:
